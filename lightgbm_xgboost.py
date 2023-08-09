@@ -339,7 +339,7 @@ def data_split(data, n,m):
 
 # In[2] 加载数据
 data = pd.read_csv('prepared_data.csv').iloc[:, :].values
-n_steps = 96  # 基于前6小时的数据
+n_steps = 96*7  # 基于前6小时的数据
 m = 1
 dimension = 4*n_steps
 input_data, output_data = data_split(data, n_steps,m)

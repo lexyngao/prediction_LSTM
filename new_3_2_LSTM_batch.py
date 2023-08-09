@@ -69,7 +69,7 @@ out_num = train_label.shape[1]
 # In[]定义超参数
 num_epochs = 20  # 迭代次数
 batch_size = 128  # batchsize
-alpha = 0.001  # 学习率
+alpha = 0.0001  # 学习率
 hidden_nodes0 = 200  # 第一隐含层神经元
 hidden_nodes = 200  # 第二隐含层神经元
 input_features = in_num
