@@ -47,9 +47,10 @@ def split_data(data,n,m):
 data=pd.read_csv("prepared_data.csv").values
 cols = data.shape[1]
 n_steps = 96*7
-m = 96
 dimension = cols*n_steps
+# 这是lstm预测的output的dimension
 prediction_dimension = 96
+m = prediction_dimension
 
 in_,out_,out_single = split_data(data,n_steps,m)
 
@@ -62,7 +63,7 @@ test_label = out_[n[m:],]
 train_label_single = out_single[n[0:m],]
 test_label_single = out_single[n[m:],]
 
-# 变换为dataframe,列名为由'time','value','is_weekday','weather'组成的历史数据，共96组，96*4列
+# 变换为dataframe,列名为由'time','value','is_weekday','weather'组成的历史数据，共n_steps组，每组7列
 columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
 train_data = pd.DataFrame(train_data,columns=columns_names)
 test_data = pd.DataFrame(test_data,columns=columns_names)
@@ -194,7 +195,42 @@ print('测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' 
 
 # plot test_set result
 plt.figure()
-plt.plot(test_label1[0,:], c='r', label='true')
-plt.plot(test_pred1[0,:], c='b', label='predict')
+if prediction_dimension == 1:
+    plt.plot(test_label1[:,:], c='r', label='true')
+    plt.plot(test_pred1[:,:], c='b', label='predict')
+else: # 预测太多维了 只展示预测的第一天
+    plt.plot(test_label1[0, :], c='r', label='true')
+    plt.plot(test_pred1[0, :], c='b', label='predict')
 plt.legend()
 plt.show()
+
+from scipy.optimize import minimize
+from numpy.lib.stride_tricks import sliding_window_view
+
+catboost_predictions = test_predictions
+# Calculate the CatBoost predictions in sliding window form
+catboost_predictions_sliding = sliding_window_view(catboost_predictions, window_shape=(prediction_dimension,))
+
+lstm_sliding_window_size = catboost_predictions_sliding.shape[0]
+lstm_predictions = test_pred1[:lstm_sliding_window_size]  # Consider only the first lstm_sliding_window_size lines
+
+# Calculate the optimal weighted combination using the Lagrangian multiplier method
+def objective(weights):
+    combined_predictions = weights[0] * lstm_predictions + weights[1] * catboost_predictions_sliding
+    return np.mean((combined_predictions - test_label) ** 2)
+
+# Define the constraint
+def constraint(weights):
+    return np.sum(weights) - 1
+
+# Initial weights (equal weights for both models)
+initial_weights = [0.5, 0.5]
+
+# Minimize the objective function subject to the constraints
+result = minimize(objective, initial_weights, constraints={'type': 'eq', 'fun': constraint})
+
+# Get the optimal weights
+optimal_weights = result.x
+
+# Calculate the final forecast results using the optimal weights
+final_predictions = optimal_weights[0] * lstm_predictions + optimal_weights[1] * catboost_predictions_sliding
