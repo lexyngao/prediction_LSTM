@@ -191,7 +191,7 @@ test_mae = np.mean(np.abs(test_pred1 - test_label1))
 # R2
 test_r2 = r2_score(test_label1, test_pred1)
 
-print('测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+print('LSTM利用CatBoost后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
 
 # plot test_set result
 plt.figure()
@@ -208,16 +208,20 @@ from scipy.optimize import minimize
 from numpy.lib.stride_tricks import sliding_window_view
 
 catboost_predictions = test_predictions
+
 # Calculate the CatBoost predictions in sliding window form
 catboost_predictions_sliding = sliding_window_view(catboost_predictions, window_shape=(prediction_dimension,))
 
-lstm_sliding_window_size = catboost_predictions_sliding.shape[0]
-lstm_predictions = test_pred1[:lstm_sliding_window_size]  # Consider only the first lstm_sliding_window_size lines
+# 转换成sliding window之后行数有所减少
+sliding_size = catboost_predictions_sliding.shape[0]
+
+lstm_predictions = test_pred1[:sliding_size]  # Consider only the first sliding_size lines
+test_label_sliding = test_label[:sliding_size]
 
 # Calculate the optimal weighted combination using the Lagrangian multiplier method
 def objective(weights):
     combined_predictions = weights[0] * lstm_predictions + weights[1] * catboost_predictions_sliding
-    return np.mean((combined_predictions - test_label) ** 2)
+    return np.mean((combined_predictions - test_label_sliding) ** 2)
 
 # Define the constraint
 def constraint(weights):
@@ -234,3 +238,33 @@ optimal_weights = result.x
 
 # Calculate the final forecast results using the optimal weights
 final_predictions = optimal_weights[0] * lstm_predictions + optimal_weights[1] * catboost_predictions_sliding
+
+# Save the final predictions to a CSV file
+np.savetxt('final_predictions.csv', final_predictions, delimiter=',')
+
+# plot test_set result
+plt.figure()
+if prediction_dimension == 1:
+    plt.plot(test_label_sliding[:,:], c='r', label='true')
+    plt.plot(test_pred1[:,:], c='b', label='predict_LSTM')
+    plt.plot(catboost_predictions[:, :], c='g', label='predict_Catboost')
+    plt.plot(final_predictions[:, :], c='m', label='predict_Catboost_LSTM')
+else: # 预测太多维了 只展示预测的第一天
+    plt.plot(test_label_sliding[0, :], c='r', label='true')
+    plt.plot(test_pred1[0, :], c='b', label='predict_LSTM')
+    plt.plot(catboost_predictions_sliding[0, :], c='g', label='predict_Catboost')
+    plt.plot(final_predictions[0, :], c='m', label='predict_Catboost_LSTM')
+plt.legend()
+plt.show()
+
+# mape
+test_mape = np.mean(np.abs((final_predictions - test_label_sliding) / test_label_sliding))
+# rmse
+test_rmse = np.sqrt(np.mean(np.square(final_predictions - test_label_sliding)))
+# mae
+test_mae = np.mean(np.abs(final_predictions - test_label_sliding))
+# R2
+test_r2 = r2_score(test_label_sliding, final_predictions)
+
+print('最终调和后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+
