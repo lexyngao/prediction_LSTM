@@ -23,7 +23,7 @@ def split_data(data,n,m):
     # out_:m组结果
     # out_single:单个结果
     in_, out_, out_single = [], [],[]
-    n_samples = data.shape[0] - n - m
+    n_samples = data.shape[0] - n - m - 95
     for i in range(n_samples):
         input_data = []
         for j in range(i, i + n):
@@ -32,8 +32,8 @@ def split_data(data,n,m):
         in_.append(input_data)
         output_data = []
         output_data_single = []
-        output_data_single.append(data[i+n,1])
-        for j in range(i + n, i + n + m):
+        output_data_single.append(data[i+n+95,1])
+        for j in range(i + n +95 , i + n + m+95):
             output_data.append(data[j, 1])
         out_.append(output_data)
         out_single.append(output_data_single)
@@ -78,6 +78,7 @@ feature_importance = catboost.get_feature_importance()
 # Step 3: Select the features with importance higher than 0.01
 selected_features = [columns_names[i] for i, importance in enumerate(feature_importance) if importance > 0.01]
 
+# np.savetxt('selected_features.csv', selected_features, delimiter=',')
 # Step 4: Make predictions using CatBoost Regressor
 test_predictions = catboost.predict(test_data)
 train_predictions = catboost.predict(train_data)
@@ -241,7 +242,9 @@ final_predictions = optimal_weights[0] * lstm_predictions + optimal_weights[1] *
 
 # Save the final predictions to a CSV file
 np.savetxt('final_predictions.csv', final_predictions, delimiter=',')
-
+np.savetxt('test_label_sliding.csv', test_label_sliding, delimiter=',')
+np.savetxt('lstm_predictions.csv', lstm_predictions, delimiter=',')
+np.savetxt('catboost_predictions_sliding.csv', catboost_predictions_sliding, delimiter=',')
 # plot test_set result
 plt.figure()
 if prediction_dimension == 1:
@@ -257,6 +260,22 @@ else: # 预测太多维了 只展示预测的第一天
 plt.legend()
 plt.show()
 
+
+# mape
+test_mape = np.mean(np.abs((catboost_predictions_sliding - test_label_sliding) / test_label_sliding))
+# rmse
+test_rmse = np.sqrt(np.mean(np.square(catboost_predictions_sliding - test_label_sliding)))
+# mae
+test_mae = np.mean(np.abs(catboost_predictions_sliding - test_label_sliding))
+# R2
+test_r2 = r2_score(test_label_sliding, catboost_predictions_sliding)
+
+print('CatBoost测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+
+
+
+
+
 # mape
 test_mape = np.mean(np.abs((final_predictions - test_label_sliding) / test_label_sliding))
 # rmse
@@ -267,4 +286,3 @@ test_mae = np.mean(np.abs(final_predictions - test_label_sliding))
 test_r2 = r2_score(test_label_sliding, final_predictions)
 
 print('最终调和后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
-

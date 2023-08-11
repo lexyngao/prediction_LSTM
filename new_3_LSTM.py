@@ -26,7 +26,7 @@ def split_data(data,n):
     for i in range(N):
         # 之前的数据
         for j in range(i,i+n):
-            for k in range(0,4):
+            for k in range(0,cols):
                 in_.append(data[j,k])
         # 横向的同期数据
         # in_.append(data[i+n,0])
@@ -39,8 +39,9 @@ def split_data(data,n):
     out_=np.array(out_).reshape(len(out_),-1)
     return in_,out_
 data=pd.read_csv("prepared_data.csv").values
-n_steps = 96
-dimension = 4*n_steps
+n_steps = 96*7
+cols = data.shape[1]
+dimension = cols*n_steps
 # data = data.reshape(-1,)
 in_,out_ = split_data(data,n_steps)
 
