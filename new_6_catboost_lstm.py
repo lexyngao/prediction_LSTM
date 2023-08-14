@@ -64,7 +64,8 @@ n=range(in_catboost.shape[0])
 m=int(0.7 * in_catboost.shape[0])#最后两天测试
 train_data = in_catboost[n[0:m],]
 test_data = in_catboost[n[m:],]
-
+train_data_lstm = in_[n[0:m],]
+test_data_lstm = in_[n[m:],]
 
 train_label = out_[n[0:m],]
 test_label = out_[n[m:],]
@@ -75,7 +76,8 @@ test_label_single = out_single[n[m:],]
 columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
 train_data = pd.DataFrame(train_data,columns=columns_names)
 test_data = pd.DataFrame(test_data,columns=columns_names)
-
+train_data_lstm = pd.DataFrame(train_data_lstm,columns=columns_names)
+test_data_lstm = pd.DataFrame(test_data_lstm,columns=columns_names)
 
 # Step 2: Train the CatBoost Regressor and evaluate feature importance
 # 用batch数据放入CatBoost来得到一个预测值
@@ -95,9 +97,9 @@ train_predictions = catboost.predict(train_data)
 # predictions = catboost.predict(test_data[selected_features])
 
 # Step 5: Prepare the data for LSTM model
-X_train_lstm = train_data[selected_features].values
+X_train_lstm = train_data_lstm[selected_features].values
 X_train_lstm = np.hstack((X_train_lstm,train_predictions.reshape(-1,1))) # 添加预测值
-X_test_lstm = test_data[selected_features].values
+X_test_lstm = test_data_lstm[selected_features].values
 X_test_lstm = np.hstack((X_test_lstm,test_predictions.reshape(-1,1))) # 添加预测值
 y_train_lstm = train_label
 y_test_lstm = test_label
