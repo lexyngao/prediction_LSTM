@@ -22,14 +22,19 @@ from tensorflow.keras.layers import LSTM, Dense
 def split_data(data,n,m):
     # out_:m组结果
     # out_single:单个结果
-    in_, out_, out_single = [], [],[]
-    n_samples = data.shape[0] - n - m - 95
+    in_,in_catboost, out_, out_single = [], [],[],[]
+    n_samples = data.shape[0] - n - m - (m-1) #m-1: catboost的intervals
     for i in range(n_samples):
-        input_data = []
-        for j in range(i, i + n):
-            for k in range(0, cols):
-                input_data.append(data[j, k])
+        input_data,input_data_catboost = [],[]
+        for j in range(i, i + n + (m-1)):
+            if j < i + n :
+                for k in range(0, cols):
+                    input_data_catboost.append(data[j, k])
+            if j >= i + m - 1:
+                for k in range(0, cols):
+                    input_data.append(data[j, k])
         in_.append(input_data)
+        in_catboost.append(input_data_catboost)
         output_data = []
         output_data_single = []
         output_data_single.append(data[i+n+95,1])
@@ -39,25 +44,28 @@ def split_data(data,n,m):
         out_single.append(output_data_single)
 
 
-    input_data = np.array(in_)
-    output_data = np.array(out_)
+    input_data_lstm = np.array(in_)
+    input_data_catboost = np.array(in_catboost)
+    output_data_lstm = np.array(out_)
     output_data_single = np.array(out_single)
-    return input_data, output_data ,output_data_single
+    return input_data_lstm,input_data_catboost, output_data_lstm ,output_data_single
 
 data=pd.read_csv("prepared_data.csv").values
 cols = data.shape[1]
-n_steps = 96*7
+n_steps = 96*6
 dimension = cols*n_steps
 # 这是lstm预测的output的dimension
 prediction_dimension = 96
 m = prediction_dimension
 
-in_,out_,out_single = split_data(data,n_steps,m)
+in_,in_catboost,out_,out_single = split_data(data,n_steps,m)
 
-n=range(in_.shape[0])
-m=int(0.7 * in_.shape[0])#最后两天测试
-train_data = in_[n[0:m],]
-test_data = in_[n[m:],]
+n=range(in_catboost.shape[0])
+m=int(0.7 * in_catboost.shape[0])#最后两天测试
+train_data = in_catboost[n[0:m],]
+test_data = in_catboost[n[m:],]
+
+
 train_label = out_[n[0:m],]
 test_label = out_[n[m:],]
 train_label_single = out_single[n[0:m],]
@@ -112,7 +120,7 @@ in_num = train_data_selected.shape[1]
 out_num = train_label.shape[1]
 num_epochs = 20  # 迭代次数
 batch_size = 128  # batchsize
-alpha = 0.0001  # 学习率
+alpha = 0.0009  # 学习率
 hidden_nodes0 = 200  # 第一隐含层神经元
 hidden_nodes = 200  # 第二隐含层神经元
 input_features = in_num
@@ -286,3 +294,44 @@ test_mae = np.mean(np.abs(final_predictions - test_label_sliding))
 test_r2 = r2_score(test_label_sliding, final_predictions)
 
 print('最终调和后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+test_label_sliding =pd.read_csv("test_label_sliding.csv").values
+lstm_predictions = pd.read_csv("lstm_predictions.csv").values
+catboost_predictions_sliding = pd.read_csv("catboost_predictions_sliding.csv").values
+final_predictions = pd.read_csv("final_predictions.csv").values
+
+# catboost_predictions_sliding = sliding_window_view(catboost_predictions, window_shape=(96,))
+
+# Assuming catboost_predictions_sliding is the sliding window format matrix
+test_label_vector = test_label_sliding.flatten()
+catboost_predictions_vector = catboost_predictions_sliding.flatten()
+final_predictions_vector = final_predictions.flatten()
+
+# Now catboost_predictions_vector is a continuous vector without repetitive elements
+
+# Get the rows that are multiples of 96 and lower than 500
+print_length = 96*3
+rows_to_plot_true = test_label_sliding[(np.arange(test_label_sliding.shape[0]) % 96 == 0) & (np.arange(test_label_sliding.shape[0]) < print_length)]
+rows_to_plot_true = rows_to_plot_true.flatten()
+plt.plot(rows_to_plot_true, c='r', label='true')
+
+rows_to_plot_catboost = catboost_predictions_sliding[(np.arange(catboost_predictions_sliding.shape[0]) % 96 == 0) & (np.arange(catboost_predictions_sliding.shape[0]) < print_length)]
+rows_to_plot_catboost = rows_to_plot_catboost.flatten()
+plt.plot(rows_to_plot_catboost, c='y', label='predict_CatBoost')
+
+rows_to_plot_final = final_predictions[(np.arange(final_predictions.shape[0]) % 96 == 0) & (np.arange(final_predictions.shape[0]) < print_length)]
+rows_to_plot_final = rows_to_plot_final.flatten()
+plt.plot(rows_to_plot_final, c='b', label='predict_Final')
+
+rows_to_plot_lstm = lstm_predictions[(np.arange(lstm_predictions.shape[0]) % 96 == 0) & (np.arange(lstm_predictions.shape[0]) < print_length)]
+rows_to_plot_lstm = rows_to_plot_lstm.flatten()
+plt.plot(rows_to_plot_lstm, c='m', label='predict_LSTM')
+
+
+# plt.plot(test_label_sliding[::95], c='r', label='true')
+# plt.plot(lstm_predictions[::95], c='b', label='predict_LSTM')
+# Plot the rows
+# for row in rows_to_plot:
+#     plt.plot(row)
+# plt.plot(final_predictions[::95], c='m', label='predict_Catboost_LSTM')
+plt.legend()
+plt.show()
