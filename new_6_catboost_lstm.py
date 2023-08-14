@@ -96,6 +96,7 @@ train_predictions = catboost.predict(train_data)
 
 # predictions = catboost.predict(test_data[selected_features])
 
+
 # Step 5: Prepare the data for LSTM model
 X_train_lstm = train_data_lstm[selected_features].values
 X_train_lstm = np.hstack((X_train_lstm,train_predictions.reshape(-1,1))) # 添加预测值
