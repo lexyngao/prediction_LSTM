@@ -18,6 +18,8 @@ df['time'] += pd.Timedelta(hours=8)
 # df = df[df['time'] >= s_date]
 
 # 先处理异常值
+# Change negative values in 'value' column to 0
+df.loc[df['value'] < 0, 'value'] = 0
 values = df['value']
 mean = values.mean()
 std = values.std()
@@ -81,5 +83,5 @@ df_merge['time'] = pd.to_datetime(df_merge['time'], format='%Y-%m-%dT%H:%M:%SZ')
 
 
 # 导出csv
-df_merge.to_csv('prepared_data.csv', index=False)
+df_merge.to_csv('prepared_data_0.csv', index=False)
 

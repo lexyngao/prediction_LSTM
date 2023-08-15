@@ -50,7 +50,7 @@ def split_data(data,n,m):
     output_data_single = np.array(out_single)
     return input_data_lstm,input_data_catboost, output_data_lstm ,output_data_single
 
-data=pd.read_csv("prepared_data.csv").values
+data=pd.read_csv("prepared_data_0.csv").values
 cols = data.shape[1]
 n_steps = 96*6
 dimension = cols*n_steps
