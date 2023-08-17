@@ -1,4 +1,4 @@
-# Import the required libraries
+#Import the required libraries
 import math
 from matplotlib import pyplot as plt
 from scipy.io import savemat
@@ -22,51 +22,43 @@ from tensorflow.keras.layers import LSTM, Dense
 def split_data(data,n,m):
     # out_:m组结果
     # out_single:单个结果
-    in_,in_catboost, out_, out_single = [], [],[],[]
-    n_samples = data.shape[0] - n - m - (m-1) #m-1: catboost的intervals
+    in_, out_, out_single = [], [],[]
+    n_samples = data.shape[0] - n - m
     for i in range(n_samples):
-        input_data,input_data_catboost = [],[]
-        for j in range(i, i + n + (m-1)):
-            if j < i + n :
-                for k in range(0, cols):
-                    input_data_catboost.append(data[j, k])
-            if j >= i + m - 1:
-                for k in range(0, cols):
-                    input_data.append(data[j, k])
+        input_data = []
+        for j in range(i, i + n):
+            for k in range(0, cols):
+                input_data.append(data[j, k])
         in_.append(input_data)
-        in_catboost.append(input_data_catboost)
         output_data = []
         output_data_single = []
-        output_data_single.append(data[i+n+95,1])
-        for j in range(i + n +95 , i + n + m+95):
+        output_data_single.append(data[i+n,1])
+        for j in range(i + n, i + n + m):
             output_data.append(data[j, 1])
         out_.append(output_data)
         out_single.append(output_data_single)
 
 
-    input_data_lstm = np.array(in_)
-    input_data_catboost = np.array(in_catboost)
-    output_data_lstm = np.array(out_)
+    input_data = np.array(in_)
+    output_data = np.array(out_)
     output_data_single = np.array(out_single)
-    return input_data_lstm,input_data_catboost, output_data_lstm ,output_data_single
+    return input_data, output_data ,output_data_single
 
-data=pd.read_csv("prepared_data_0.csv").values
+data=pd.read_csv("prepared_data.csv")
+data_value = data.values
 cols = data.shape[1]
-n_steps = 96*7
+n_steps = 96
 dimension = cols*n_steps
 # 这是lstm预测的output的dimension
-prediction_dimension = 96
+prediction_dimension = 1
 m = prediction_dimension
 
-in_,in_catboost,out_,out_single = split_data(data,n_steps,m)
+in_,out_,out_single = split_data(data_value,n_steps,m)
 
-n=range(in_catboost.shape[0])
-m=int(0.7 * in_catboost.shape[0])#最后两天测试
-train_data = in_catboost[n[0:m],]
-test_data = in_catboost[n[m:],]
-train_data_lstm = in_[n[0:m],]
-test_data_lstm = in_[n[m:],]
-
+n=range(in_.shape[0])
+m=int(0.9 * in_.shape[0])#最后两天测试
+train_data = in_[n[0:m],]
+test_data = in_[n[m:],]
 train_label = out_[n[0:m],]
 test_label = out_[n[m:],]
 train_label_single = out_single[n[0:m],]
@@ -76,39 +68,62 @@ test_label_single = out_single[n[m:],]
 columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
 train_data = pd.DataFrame(train_data,columns=columns_names)
 test_data = pd.DataFrame(test_data,columns=columns_names)
-train_data_lstm = pd.DataFrame(train_data_lstm,columns=columns_names)
-test_data_lstm = pd.DataFrame(test_data_lstm,columns=columns_names)
 
-# Drop columns with the name "time" except for "time_0"
-train_data = train_data.drop(columns=[col for col in train_data.columns if col.startswith('time') and col != 'time_0'])
-test_data = test_data.drop(columns=[col for col in test_data.columns if col.startswith('time') and col != 'time_0'])
-train_data_lstm = train_data_lstm.drop(columns=[col for col in train_data_lstm.columns if col.startswith('time') and col != 'time_0'])
-test_data_lstm = test_data_lstm.drop(columns=[col for col in test_data_lstm.columns if col.startswith('time') and col != 'time_0'])
-columns_names = ['time_0']
-columns_names += [j+'_'+str(i) for i in range(0,n_steps) for j in ['value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
 
 # Step 2: Train the CatBoost Regressor and evaluate feature importance
 # 用batch数据放入CatBoost来得到一个预测值
 catboost = CatBoostRegressor()
-catboost.fit(train_data, train_label_single)
+model=catboost.fit(train_data, train_label_single)
 feature_importance = catboost.get_feature_importance()
-
+# model.save_model('D:/Siemens Project/PV prediction/基于transformer的回归预测/predict_1.model')
 # Step 3: Select the features with importance higher than 0.01
 selected_features = [columns_names[i] for i, importance in enumerate(feature_importance) if importance > 0.01]
-
-# np.savetxt('selected_features.csv', selected_features, delimiter=',')
+# newcatboost = CatBoostRegressor()
+# newcatboost.load_model('D:/Siemens Project/PV prediction/基于transformer的回归预测/predict_1.model')
 # Step 4: Make predictions using CatBoost Regressor
 test_predictions = catboost.predict(test_data)
 train_predictions = catboost.predict(train_data)
 
+predict_columns = ['predict_' + str(i) for i in range(1,97)]
+predict_data = pd.DataFrame([],index=[i for i in range(len(train_predictions))],columns=predict_columns)
+predict_data['predict_1'] = train_predictions
+
+new_train = train_data
+#####遍历生成预测模型 + In_data的修改
+for i in range(1,96):
+    new_train = new_train.iloc[1:,:]
+    ##追加的列名
+    column_name_to_fill = 'predict_value_' + str(i)
+    ##删除的列名
+    column_name_to_delete = 'value_' + str(96-i)
+    new_train.loc[:,column_name_to_fill] = train_predictions[:-1]
+    del new_train[column_name_to_delete]
+    #in_.append(p_.tolist())
+    out_ = train_label_single[i:]
+    catboost = CatBoostRegressor()
+    model = catboost.fit(new_train, out_)
+    feature_importance = catboost.get_feature_importance()
+    model.save_model('D:/Siemens Project/PV prediction/基于transformer的回归预测/predict_' + str(i+1) + '.model')
+    print("model success" + str(i) )
+    train_predictions = model.predict(new_train)
+
+
+
+
+# 直接向p_arr里添加p_ #注意一定不要忘记用赋值覆盖原p_arr不然不会变
+# from sklearn.metrics import r2_score
+# from sklearn.metrics import mean_absolute_error
+# from sklearn.metrics import mean_squared_error
+# predict_pairs = test_predictions.tolist()
+# real_pairs = [i[0] for i in test_label.tolist()]
+# rsquare = r2_score(real_pairs,predict_pairs)
 
 # predictions = catboost.predict(test_data[selected_features])
 
-
 # Step 5: Prepare the data for LSTM model
-X_train_lstm = train_data_lstm[selected_features].values
+X_train_lstm = train_data[selected_features].values
 X_train_lstm = np.hstack((X_train_lstm,train_predictions.reshape(-1,1))) # 添加预测值
-X_test_lstm = test_data_lstm[selected_features].values
+X_test_lstm = test_data[selected_features].values
 X_test_lstm = np.hstack((X_test_lstm,test_predictions.reshape(-1,1))) # 添加预测值
 y_train_lstm = train_label
 y_test_lstm = test_label
@@ -131,7 +146,7 @@ in_num = train_data_selected.shape[1]
 out_num = train_label.shape[1]
 num_epochs = 20  # 迭代次数
 batch_size = 128  # batchsize
-alpha = 0.0009  # 学习率
+alpha = 0.0001  # 学习率
 hidden_nodes0 = 200  # 第一隐含层神经元
 hidden_nodes = 200  # 第二隐含层神经元
 input_features = in_num
@@ -211,7 +226,7 @@ test_mae = np.mean(np.abs(test_pred1 - test_label1))
 # R2
 test_r2 = r2_score(test_label1, test_pred1)
 
-print('LSTM利用CatBoost后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+print('测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
 
 # plot test_set result
 plt.figure()
@@ -228,20 +243,16 @@ from scipy.optimize import minimize
 from numpy.lib.stride_tricks import sliding_window_view
 
 catboost_predictions = test_predictions
-
 # Calculate the CatBoost predictions in sliding window form
 catboost_predictions_sliding = sliding_window_view(catboost_predictions, window_shape=(prediction_dimension,))
 
-# 转换成sliding window之后行数有所减少
-sliding_size = catboost_predictions_sliding.shape[0]
-
-lstm_predictions = test_pred1[:sliding_size]  # Consider only the first sliding_size lines
-test_label_sliding = test_label[:sliding_size]
+lstm_sliding_window_size = catboost_predictions_sliding.shape[0]
+lstm_predictions = test_pred1[:lstm_sliding_window_size]  # Consider only the first lstm_sliding_window_size lines
 
 # Calculate the optimal weighted combination using the Lagrangian multiplier method
 def objective(weights):
     combined_predictions = weights[0] * lstm_predictions + weights[1] * catboost_predictions_sliding
-    return np.mean((combined_predictions - test_label_sliding) ** 2)
+    return np.mean((combined_predictions - test_label) ** 2)
 
 # Define the constraint
 def constraint(weights):
@@ -258,91 +269,3 @@ optimal_weights = result.x
 
 # Calculate the final forecast results using the optimal weights
 final_predictions = optimal_weights[0] * lstm_predictions + optimal_weights[1] * catboost_predictions_sliding
-
-# Save the final predictions to a CSV file
-np.savetxt('final_predictions.csv', final_predictions, delimiter=',')
-np.savetxt('test_label_sliding.csv', test_label_sliding, delimiter=',')
-np.savetxt('lstm_predictions.csv', lstm_predictions, delimiter=',')
-np.savetxt('catboost_predictions_sliding.csv', catboost_predictions_sliding, delimiter=',')
-# plot test_set result
-plt.figure()
-if prediction_dimension == 1:
-    plt.plot(test_label_sliding[:,:], c='r', label='true')
-    plt.plot(test_pred1[:,:], c='b', label='predict_LSTM')
-    plt.plot(catboost_predictions[:, :], c='g', label='predict_Catboost')
-    plt.plot(final_predictions[:, :], c='m', label='predict_Catboost_LSTM')
-else: # 预测太多维了 只展示预测的第一天
-    plt.plot(test_label_sliding[0, :], c='r', label='true')
-    plt.plot(test_pred1[0, :], c='b', label='predict_LSTM')
-    plt.plot(catboost_predictions_sliding[0, :], c='g', label='predict_Catboost')
-    plt.plot(final_predictions[0, :], c='m', label='predict_Catboost_LSTM')
-plt.legend()
-plt.show()
-
-
-# mape
-test_mape = np.mean(np.abs((catboost_predictions_sliding - test_label_sliding) / test_label_sliding))
-# rmse
-test_rmse = np.sqrt(np.mean(np.square(catboost_predictions_sliding - test_label_sliding)))
-# mae
-test_mae = np.mean(np.abs(catboost_predictions_sliding - test_label_sliding))
-# R2
-test_r2 = r2_score(test_label_sliding, catboost_predictions_sliding)
-
-print('CatBoost测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
-
-
-
-
-
-# mape
-test_mape = np.mean(np.abs((final_predictions - test_label_sliding) / test_label_sliding))
-# rmse
-test_rmse = np.sqrt(np.mean(np.square(final_predictions - test_label_sliding)))
-# mae
-test_mae = np.mean(np.abs(final_predictions - test_label_sliding))
-# R2
-test_r2 = r2_score(test_label_sliding, final_predictions)
-
-print('最终调和后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
-test_label_sliding =pd.read_csv("test_label_sliding.csv").values
-lstm_predictions = pd.read_csv("lstm_predictions.csv").values
-catboost_predictions_sliding = pd.read_csv("catboost_predictions_sliding.csv").values
-final_predictions = pd.read_csv("final_predictions.csv").values
-
-# catboost_predictions_sliding = sliding_window_view(catboost_predictions, window_shape=(96,))
-
-# Assuming catboost_predictions_sliding is the sliding window format matrix
-test_label_vector = test_label_sliding.flatten()
-catboost_predictions_vector = catboost_predictions_sliding.flatten()
-final_predictions_vector = final_predictions.flatten()
-
-# Now catboost_predictions_vector is a continuous vector without repetitive elements
-
-# Get the rows that are multiples of 96 and lower than 500
-print_length = 96*3
-rows_to_plot_true = test_label_sliding[(np.arange(test_label_sliding.shape[0]) % 96 == 0) & (np.arange(test_label_sliding.shape[0]) < print_length)]
-rows_to_plot_true = rows_to_plot_true.flatten()
-plt.plot(rows_to_plot_true, c='r', label='true')
-
-rows_to_plot_catboost = catboost_predictions_sliding[(np.arange(catboost_predictions_sliding.shape[0]) % 96 == 0) & (np.arange(catboost_predictions_sliding.shape[0]) < print_length)]
-rows_to_plot_catboost = rows_to_plot_catboost.flatten()
-plt.plot(rows_to_plot_catboost, c='y', label='predict_CatBoost')
-
-rows_to_plot_final = final_predictions[(np.arange(final_predictions.shape[0]) % 96 == 0) & (np.arange(final_predictions.shape[0]) < print_length)]
-rows_to_plot_final = rows_to_plot_final.flatten()
-plt.plot(rows_to_plot_final, c='b', label='predict_Final')
-
-rows_to_plot_lstm = lstm_predictions[(np.arange(lstm_predictions.shape[0]) % 96 == 0) & (np.arange(lstm_predictions.shape[0]) < print_length)]
-rows_to_plot_lstm = rows_to_plot_lstm.flatten()
-plt.plot(rows_to_plot_lstm, c='m', label='predict_LSTM')
-
-
-# plt.plot(test_label_sliding[::95], c='r', label='true')
-# plt.plot(lstm_predictions[::95], c='b', label='predict_LSTM')
-# Plot the rows
-# for row in rows_to_plot:
-#     plt.plot(row)
-# plt.plot(final_predictions[::95], c='m', label='predict_Catboost_LSTM')
-plt.legend()
-plt.show()
