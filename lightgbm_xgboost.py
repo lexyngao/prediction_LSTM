@@ -314,7 +314,7 @@ def data_split(data, n,m):
         # in_.append(data[i:i + n, :])
         # 用前期n套+同期数据 的拆分版本
         for j in range(i,i+n):
-            for k in range(0,4):
+            for k in range(0,7):
                 in_.append(data[j,k])
         # 历史数据:仅包含values的历史值
         # for j in range(i,i+n):
@@ -341,7 +341,7 @@ def data_split(data, n,m):
 data = pd.read_csv('prepared_data.csv').iloc[:, :].values
 n_steps = 96*7  # 基于前6小时的数据
 m = 1
-dimension = 4*n_steps
+dimension = 7*n_steps
 input_data, output_data = data_split(data, n_steps,m)
 # 数据划分 前80%作为训练集 后20%作为测试集
 n = range(input_data.shape[0])
@@ -350,8 +350,8 @@ train_data = input_data[n[0:m1], :]
 train_label = output_data[n[0:m1]]
 test_data = input_data[n[m1:], :]
 test_label = output_data[n[m1:]]
-# 变换为dataframe,列名为由'time','value','is_weekday','weather'组成的历史数据，共96组，96*4列
-columns_names = [j+'_'+str(i) for i in range(0,96) for j in ['time','value','is_weekday','weather']]
+# 变换为dataframe,列名为由'time','value','is_weekday','weather'组成的历史数据，共96组，96*7列
+columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
 train_data = pd.DataFrame(train_data,columns=columns_names)
 train_data['power'] = train_label
 test_data = pd.DataFrame(test_data,columns=columns_names)

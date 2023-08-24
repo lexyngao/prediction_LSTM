@@ -41,6 +41,9 @@ df['is_weekday'] = df['time'].dt.dayofweek < 5
 df['is_holiday'] = df['time'].apply(lambda x: cc.is_holiday(x.date()))
 df.loc[df['is_holiday'] | ~df['is_weekday'], 'is_weekday'] = False
 
+# df['is_Sat'] = (df['time'].dt.dayofweek == 6)
+# df['is_Sun'] = (df['is_weekday'] == False )&( df['is_Sat'] == False)
+
 df.drop(columns=['is_holiday'], inplace=True)
 
 # 提取出天气+时间信息
