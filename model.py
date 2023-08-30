@@ -55,10 +55,12 @@ def LSTM(x,hidden_nodes0,hidden_nodes,input_features,output_class):
         outputs,_=tf.nn.dynamic_rnn(rnn_cell,x_reshape,dtype=tf.float32)
         x_at_reshape=tf.reshape(outputs,[-1,hidden_nodes0])
     #
+
     with tf.variable_scope("OUTPUT"):
         w_fc2=weight_variables([hidden_nodes0,output_class])
         b_fc2=bias_variables([output_class])
         y_predict=tf.matmul(x_at_reshape,w_fc2)+b_fc2
+
     return tf.reshape(y_predict, [-1, output_class])
 
 #双向LSTM加注意力机制
@@ -87,3 +89,30 @@ def BILSTM_AT(x,hidden_nodes0,hidden_nodes,input_features,output_class):
         y_predict=tf.matmul(x_at_reshape,w_fc2)+b_fc2
     return tf.reshape(y_predict, [-1, output_class])
 
+
+# lstm_attention
+def LSTM_AT(x, hidden_nodes0, hidden_nodes, input_features, output_class):
+    x_reshape = tf.reshape(x, [-1, 1, input_features])
+    #
+    with tf.variable_scope("LSTM"):
+        rnn_cell = tf.nn.rnn_cell.MultiRNNCell(
+            [tf.nn.rnn_cell.LSTMCell(hidden_nodes0), tf.nn.rnn_cell.LSTMCell(hidden_nodes0)])
+
+        outputs, _ = tf.nn.dynamic_rnn(rnn_cell, x_reshape, dtype=tf.float32)
+        x_at_reshape = tf.reshape(outputs, [-1, hidden_nodes0])
+        rnn_out = outputs
+    #
+    # 注意力层
+    with tf.variable_scope("Attention"):
+        attention_size = 64
+        attention_out = attention(rnn_out, attention_size, False)
+        pool_shape = attention_out.get_shape().as_list()
+        nodes = pool_shape[1]
+        x_at_reshape = tf.reshape(attention_out, [-1, nodes])
+
+    with tf.variable_scope("OUTPUT"):
+        w_fc2 = weight_variables([hidden_nodes0, output_class])
+        b_fc2 = bias_variables([output_class])
+        y_predict = tf.matmul(x_at_reshape, w_fc2) + b_fc2
+
+    return tf.reshape(y_predict, [-1, output_class])

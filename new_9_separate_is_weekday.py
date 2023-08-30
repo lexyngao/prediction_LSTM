@@ -3,7 +3,9 @@ import math
 from matplotlib import pyplot as plt
 from scipy.io import savemat
 from sklearn.metrics import r2_score
-# from model import BILSTM_AT
+from model import BILSTM_AT
+from model import LSTM_AT
+from model import LSTM
 import catboost
 from catboost import CatBoostRegressor
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -113,12 +115,28 @@ for i in test_data_start:
 
 print('CatBoost_weekday:', rsquare)
 
+predict_pairs = pd.DataFrame(predict_pairs)
+real_pairs = pd.DataFrame(real_pairs)
+# mape
+test_mape = np.mean(np.abs((predict_pairs - real_pairs - 1) / (real_pairs + 1)))
+# rmse
+test_rmse = np.sqrt(np.mean(np.square(predict_pairs - real_pairs)))
+# mae
+test_mae = np.mean(np.abs(predict_pairs - real_pairs))
+# R2
+test_r2 = r2_score(real_pairs, predict_pairs)
+
+print('CatBoostfor all mape:', test_mape, ' rmse:', test_rmse, ' mae:', test_mae, ' R2:', test_r2)
+
+
+
 # Import the required libraries
 import math
 from matplotlib import pyplot as plt
 from scipy.io import savemat
 from sklearn.metrics import r2_score
-from model import BILSTM_AT
+# from model import BILSTM_AT
+from model import LSTM
 import catboost
 from catboost import CatBoostRegressor
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -129,7 +147,7 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow._api.v2.compat.v1 as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+# from tensorflow.keras.layers import LSTM, Dense
 
 
 # Step 1: Load and split the data
@@ -168,7 +186,7 @@ def split_data(data,n,m):
     output_data_single = np.array(out_single)
     return input_data_lstm,input_data_catboost, output_data_lstm ,output_data_single
 
-data=pd.read_csv("prepared_data_0.csv").values
+data=pd.read_csv("prepared_data_is_weekday.csv").values
 cols = data.shape[1]
 n_steps = 96*7
 dimension = cols*n_steps
@@ -179,7 +197,7 @@ m = prediction_dimension
 in_,in_catboost,out_,out_single = split_data(data,n_steps,m)
 
 n=range(in_catboost.shape[0])
-m=int(0.7 * in_catboost.shape[0])#最后两天测试
+m=int(0.8 * in_catboost.shape[0])#最后两天测试
 train_data = in_catboost[n[0:m],]
 test_data = in_catboost[n[m:],]
 train_data_lstm = in_[n[0:m],]
@@ -191,7 +209,7 @@ train_label_single = out_single[n[0:m],]
 test_label_single = out_single[n[m:],]
 
 # 变换为dataframe,列名为由'time','value','is_weekday','weather'组成的历史数据，共n_steps组，每组7列
-columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
+columns_names = [j+'_'+str(i) for i in range(0,n_steps) for j in ['time','value','is_weekday','is_Sat','is_Sun','weather_cold','weather_warm','weather_hot','month']]
 train_data = pd.DataFrame(train_data,columns=columns_names)
 test_data = pd.DataFrame(test_data,columns=columns_names)
 train_data_lstm = pd.DataFrame(train_data_lstm,columns=columns_names)
@@ -203,7 +221,7 @@ test_data = test_data.drop(columns=[col for col in test_data.columns if col.star
 train_data_lstm = train_data_lstm.drop(columns=[col for col in train_data_lstm.columns if col.startswith('time') and col != 'time_0'])
 test_data_lstm = test_data_lstm.drop(columns=[col for col in test_data_lstm.columns if col.startswith('time') and col != 'time_0'])
 columns_names = ['time_0']
-columns_names += [j+'_'+str(i) for i in range(0,n_steps) for j in ['value','is_weekday','weather_cold','weather_warm','weather_hot','month']]
+columns_names += [j+'_'+str(i) for i in range(0,n_steps) for j in ['value','is_weekday','is_Sat','is_Sun','weather_cold','weather_warm','weather_hot','month']]
 
 # Step 2: Train the CatBoost Regressor and evaluate feature importance
 # 用batch数据放入CatBoost来得到一个预测值
@@ -259,7 +277,7 @@ tf.disable_eager_execution()
 X = tf.placeholder("float", [None, input_features])
 Y = tf.placeholder("float", [None, output_class])
 # In[] 初始化
-logits = BILSTM_AT(X, hidden_nodes0, hidden_nodes, input_features, output_class)
+logits = LSTM_AT(X, hidden_nodes0, hidden_nodes, input_features, output_class)
 loss = tf.losses.mean_squared_error(predictions=logits, labels=Y)
 global_step = tf.Variable(0)
 learning_rate = tf.train.exponential_decay(
@@ -321,7 +339,7 @@ test_pred1 = test_pred.reshape(-1, prediction_dimension)
 test_label1 = test_label.reshape(-1, prediction_dimension)
 
 # mape
-test_mape = np.mean(np.abs((test_pred1 - test_label1) / test_label1))
+test_mape = np.mean(np.abs((test_pred1 - test_label1-1) / (test_label1+1)))
 # rmse
 test_rmse = np.sqrt(np.mean(np.square(test_pred1 - test_label1)))
 # mae
@@ -399,7 +417,7 @@ final_predictions = optimal_weights[0] * lstm_predictions + optimal_weights[1] *
 
 
 # mape
-test_mape = np.mean(np.abs((catboost_predictions_sliding - test_label_sliding) / test_label_sliding))
+test_mape = np.mean(np.abs((catboost_predictions_sliding - test_label_sliding-1) / (test_label_sliding+1)))
 # rmse
 test_rmse = np.sqrt(np.mean(np.square(catboost_predictions_sliding - test_label_sliding)))
 # mae
@@ -414,7 +432,7 @@ print('CatBoost测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:', test
 
 
 # mape
-test_mape = np.mean(np.abs((final_predictions - test_label_sliding) / test_label_sliding))
+test_mape = np.mean(np.abs((final_predictions - test_label_sliding - 1) / (test_label_sliding+1)))
 # rmse
 test_rmse = np.sqrt(np.mean(np.square(final_predictions - test_label_sliding)))
 # mae
@@ -437,8 +455,8 @@ print('最终调和后测试集的mape:', test_mape, ' rmse:', test_rmse, ' mae:
 # weekend_real = []
 # Get the rows that are multiples of 96 and lower than 500
 for i in range(0,6):
-    print_length = 96*(4+i*2)
-    print_start = 96*(2+i*2)
+    print_length = 96*(10+i*2)
+    print_start = 96*(8+i*2)
     # print_length = 96*(8+i*7)
     # print_start = 96*(6+i*7)
     rows_to_plot_true = test_label_sliding[(np.arange(test_label_sliding.shape[0]) % 96 == 0) & (np.arange(test_label_sliding.shape[0]) < print_length) & (np.arange(test_label_sliding.shape[0]) >= print_start)]
